@@ -58,10 +58,14 @@ script_mise_a_jour = r"""
 import requests
 import os
 import shutil
+import sys
+import time
+import psutil  # ⚠️ Nécessite: pip install psutil
 
 version = "V1.3"
 dst = os.path.dirname(os.path.abspath(__file__))
 src = os.path.join(dst, version, "main.py")
+main_path = os.path.join(dst, "main.py")
 
 def download_github_folder(owner, repo, path, output_dir="."):
     url = f"https://api.github.com/repos/{owner}/{repo}/contents/{path}"
@@ -87,9 +91,27 @@ def download_github_folder(owner, repo, path, output_dir="."):
             sub_dir = os.path.join(output_dir, item["name"])
             download_github_folder(owner, repo, item["path"], sub_dir)
 
-def delete(fichier):
-    if os.path.exists(fichier):
-        os.remove(fichier)
+def stop_old_script(script_name="main.py"):
+    current_pid = os.getpid()
+    for proc in psutil.process_iter(["pid", "name", "cmdline"]):
+        try:
+            if (
+                proc.info["pid"] != current_pid
+                and "python" in proc.info["name"].lower()
+                and any(script_name in str(arg) for arg in proc.info["cmdline"])
+            ):
+                print(f"🛑 Arrêt du processus : {proc.info['pid']}")
+                proc.terminate()
+                proc.wait(timeout=5)
+        except (psutil.NoSuchProcess, psutil.AccessDenied):
+            pass
+
+def delete(path):
+    if os.path.exists(path):
+        if os.path.isfile(path):
+            os.remove(path)
+        elif os.path.isdir(path):
+            shutil.rmtree(path)
 
 print("🚀 Téléchargement de la nouvelle version...")
 download_github_folder(
@@ -99,15 +121,31 @@ download_github_folder(
     output_dir=f"{version}"
 )
 
-print("🧹 Suppression de l’ancienne version...")
-delete(os.path.join(dst, "main.py"))
+# Stoppe l'ancien script
+print("🛑 Tentative d'arrêt de l'ancien script...")
+stop_old_script("main.py")
+time.sleep(1)
 
-print("📦 Déplacement de la nouvelle version...")
-shutil.move(src, os.path.join(dst, "main.py"))
+# Supprime l'ancien main.py
+if os.path.exists(main_path):
+    print("🧹 Suppression de l'ancien main.py...")
+    delete(main_path)
 
-print("✅ Mise à jour terminée.")
+# Déplace le nouveau fichier
+print("📦 Installation de la nouvelle version...")
+shutil.move(src, main_path)
+
+# Supprime le dossier temporaire de la version
+print("🗑️ Nettoyage du dossier de version...")
+delete(os.path.join(dst, version))
+
+# Supprime le script de mise à jour lui-même
 delete(os.path.join(dst, "transistor_version.py"))
+
+print("✅ Mise à jour terminée. Relance du script...")
+os.execv(sys.executable, [sys.executable, main_path])
 """
+
 
 # --- Exécution ---
 check_version(version_actuelle, GITHUB_API_URL, script_mise_a_jour)
