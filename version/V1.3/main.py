@@ -5,7 +5,7 @@ import requests
 import subprocess
 
 # Version actuelle
-version_actuelle = "V1.0"
+version_actuelle = "V1.3"
 
 # dossier parent
 dst = os.path.dirname(os.path.abspath(__file__))
@@ -149,4 +149,5 @@ os.execv(sys.executable, [sys.executable, main_path])
 
 # --- Exécution ---
 check_version(version_actuelle, GITHUB_API_URL, script_mise_a_jour)
+
 print(f"version : {version_actuelle}")
